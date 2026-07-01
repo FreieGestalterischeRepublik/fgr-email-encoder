@@ -37,6 +37,7 @@ class FGR_Email_Encoder_Settings {
             'protect_using'   => $protect_using,
             'protection_text' => sanitize_text_field( $_POST['protection_text'] ?? '*geschützte E-Mail*' ),
             'show_check'      => isset( $_POST['show_check'] ) ? 1 : 0,
+            'at_replacement'  => sanitize_text_field( $_POST['at_replacement'] ?? '' ),
         ] );
 
         set_transient( 'fgr_ee_notice', 'saved', 30 );
@@ -59,11 +60,12 @@ class FGR_Email_Encoder_Settings {
     public function render_page(): void {
         if ( ! current_user_can( 'manage_options' ) ) return;
 
-        $opt           = fgr_ee_options();
-        $protection    = (int) ( $opt['protection']    ?? 1 );
-        $protect_using = $opt['protect_using']         ?? 'with_javascript';
-        $protect_text  = $opt['protection_text']       ?? '*geschützte E-Mail*';
-        $show_check    = ! empty( $opt['show_check'] );
+        $opt            = fgr_ee_options();
+        $protection     = (int) ( $opt['protection']    ?? 1 );
+        $protect_using  = $opt['protect_using']         ?? 'with_javascript';
+        $protect_text   = $opt['protection_text']       ?? '*geschützte E-Mail*';
+        $show_check     = ! empty( $opt['show_check'] );
+        $at_replacement = $opt['at_replacement']        ?? '';
         ?>
         <div class="wrap">
             <h1>FGR Email Encoder</h1>
@@ -137,6 +139,19 @@ class FGR_Email_Encoder_Settings {
                                    value="<?php echo esc_attr( $protect_text ); ?>"
                                    placeholder="*geschützte E-Mail*">
                             <p class="description">Wird angezeigt, wenn JavaScript deaktiviert ist oder bei der Methode "Ausblenden".</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row"><label for="at_replacement">@-Zeichen im Anzeigetext</label></th>
+                        <td>
+                            <input type="text" id="at_replacement" name="at_replacement" class="regular-text"
+                                   value="<?php echo esc_attr( $at_replacement ); ?>"
+                                   placeholder="Leer lassen = @ normal anzeigen">
+                            <p class="description">
+                                Leer lassen, um das <code>@</code> wie gewohnt anzuzeigen.<br>
+                                Oder einen Ersatztext eingeben, z.&nbsp;B. <code>(at)</code> oder <code>[at]</code> – dieser wird im <strong>sichtbaren Linktext</strong> gezeigt. Der eigentliche mailto-Link bleibt unverändert.
+                            </p>
                         </td>
                     </tr>
 
@@ -279,6 +294,15 @@ Schreib uns: redaktion@beispiel.de oder info@beispiel.de
                         Werden E-Mails in JavaScript-Code oder style-Tags verschlüsselt?
                     </summary>
                     <p style="margin-top:12px">Nein. Das Plugin schützt ausdrücklich keine E-Mails, die sich innerhalb von <code>&lt;script&gt;</code>- oder <code>&lt;style&gt;</code>-Tags befinden. Das würde die Funktionsfähigkeit deiner Website beeinträchtigen. Nur Inhalte, die tatsächlich im sichtbaren HTML-Text erscheinen, werden verschlüsselt.</p>
+                </details>
+
+                <details style="margin-bottom:16px;border:1px solid #ccd0d4;border-radius:4px;padding:12px 16px">
+                    <summary style="cursor:pointer;font-weight:600;font-size:14px">
+                        Kann ich das @-Zeichen im Anzeigetext ersetzen?
+                    </summary>
+                    <p style="margin-top:12px">Ja. Im Feld <strong>@-Zeichen im Anzeigetext</strong> kannst du einen Ersatztext eintragen – zum Beispiel <code>(at)</code> oder <code>[at]</code>. Das Plugin zeigt dann statt <em>info@example.com</em> den Text <em>info(at)example.com</em> an.</p>
+                    <p>Der eigentliche mailto-Link bleibt dabei vollständig erhalten – ein Klick auf die Adresse öffnet weiterhin das E-Mail-Programm mit der korrekten Adresse. Nur der sichtbare Linktext wird geändert.</p>
+                    <p>Lässt du das Feld leer, wird das <code>@</code> normal angezeigt.</p>
                 </details>
 
                 <details style="margin-bottom:16px;border:1px solid #ccd0d4;border-radius:4px;padding:12px 16px">

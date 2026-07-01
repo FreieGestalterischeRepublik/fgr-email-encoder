@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Email Encoder
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Schützt E-Mail-Adressen auf deiner Website automatisch vor Spam-Bots. Unterstützt mehrere Verschlüsselungsmethoden, Shortcodes und ist vollständig über das WordPress-Backend konfigurierbar.
- * Version:      1.0.1
+ * Version:      1.1.0
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_EE_VERSION', '1.0.1' );
+define( 'FGR_EE_VERSION', '1.1.0' );
 define( 'FGR_EE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'FGR_EE_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -311,7 +311,14 @@ function fgr_ee_options(): array {
         'protect_using'   => 'with_javascript',
         'protection_text' => '*geschützte E-Mail*',
         'show_check'      => 1,
+        'at_replacement'  => '',
     ] );
+}
+
+// @ im Anzeigetext ersetzen – href/mailto bleibt unverändert
+function fgr_ee_at_display( string $text ): string {
+    $r = fgr_ee_options()['at_replacement'] ?? '';
+    return $r !== '' ? str_replace( '@', $r, $text ) : $text;
 }
 
 // ── Kodierungs-Funktionen ─────────────────────────────────────────────────────
@@ -398,7 +405,7 @@ function fgr_ee_check_icon(): string {
 // Einen mailto-Link komplett schützen
 function fgr_ee_protect_mailto( string $email, string $display, string $method, string $fallback ): string {
     $enc_email = str_replace( '@', '[at]', str_rot13( $email ) );
-    $display   = $display ?: $email;
+    $display   = fgr_ee_at_display( $display ?: $email );
 
     switch ( $method ) {
         case 'without_javascript':
@@ -421,16 +428,18 @@ function fgr_ee_protect_mailto( string $email, string $display, string $method, 
 
 // Eine plain E-Mail-Adresse schützen (ohne mailto-Link)
 function fgr_ee_protect_plain( string $email, string $method, string $fallback ): string {
+    $display = fgr_ee_at_display( $email );
+
     switch ( $method ) {
         case 'without_javascript':
-            return fgr_ee_encode_css( $email ) . fgr_ee_check_icon();
+            return fgr_ee_encode_css( $display ) . fgr_ee_check_icon();
         case 'char_encode':
-            return antispambot( $email ) . fgr_ee_check_icon();
+            return antispambot( $display ) . fgr_ee_check_icon();
         case 'strong_method':
             return esc_html( $fallback ) . fgr_ee_check_icon();
         case 'with_javascript':
         default:
-            return fgr_ee_encode_js( $email, $fallback ) . fgr_ee_check_icon();
+            return fgr_ee_encode_js( $display, $fallback ) . fgr_ee_check_icon();
     }
 }
 
