@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Email Encoder
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Schützt E-Mail-Adressen auf deiner Website automatisch vor Spam-Bots. Unterstützt mehrere Verschlüsselungsmethoden, Shortcodes und ist vollständig über das WordPress-Backend konfigurierbar.
- * Version:      1.1.1
+ * Version:      1.1.2
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_EE_VERSION', '1.1.1' );
+define( 'FGR_EE_VERSION', '1.1.2' );
 define( 'FGR_EE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'FGR_EE_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -468,12 +468,57 @@ function fgr_ee_filter_content( string $content, string $method = '', string $fa
     $content = preg_replace_callback(
         '/<a\s([^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*)>(.*?)<\/a\s*>/is',
         function ( array $m ) use ( $method, $fallback ): string {
-            $email   = sanitize_email( $m[2] );
-            $display = wp_strip_all_tags( $m[3] );
+            $attrs_str  = $m[1];
+            $email      = sanitize_email( $m[2] );
+            $inner_html = $m[3];
+            $display    = wp_strip_all_tags( $inner_html );
+
             if ( ! $email ) return $m[0];
-            // Nur Text enthält, kein Icon-only-Link (z.B. Elementor Icon Box)
+            // Kein sichtbarer Text (z.B. Icon-only-Link wie Elementor Icon Box)
             if ( trim( $display ) === '' ) return $m[0];
-            return fgr_ee_protect_mailto( $email, $display, $method, $fallback );
+
+            // Originale class-Attribute lesen und fgr-email hinzufügen
+            $orig_class = '';
+            if ( preg_match( '/\bclass=["\']([^"\']*)["\']/', $attrs_str, $cls ) ) {
+                $orig_class = trim( $cls[1] );
+            }
+            $merged_class = $orig_class ? $orig_class . ' fgr-email' : 'fgr-email';
+
+            // href und class aus den Original-Attributen entfernen, Rest beibehalten
+            $extra = preg_replace( '/\s*href=["\'][^"\']*["\']/', '', $attrs_str );
+            $extra = preg_replace( '/\s*class=["\'][^"\']*["\']/', '', $extra );
+            $extra = trim( $extra );
+            $extra = $extra ? ' ' . $extra : '';
+
+            // Enthält das innere HTML Elemente (z.B. Elementor-Button-Struktur)?
+            // → Struktur beibehalten, nur href schützen.
+            // Enthält es nur Text (z.B. <a href="mailto:x">x@y.z</a>)?
+            // → Anzeigetext ebenfalls verschlüsseln.
+            $inner_is_html = strpos( $inner_html, '<' ) !== false;
+
+            $enc_email = str_replace( '@', '[at]', str_rot13( $email ) );
+            $txt       = fgr_ee_at_display( $display ?: $email );
+
+            switch ( $method ) {
+                case 'without_javascript':
+                    $body = $inner_is_html ? $inner_html : fgr_ee_encode_css( $txt );
+                    return '<a href="mailto:' . antispambot( $email ) . '" class="' . esc_attr( $merged_class ) . '"' . $extra . '>'
+                         . $body . '</a>' . fgr_ee_check_icon();
+
+                case 'char_encode':
+                    $body = $inner_is_html ? $inner_html : antispambot( $txt );
+                    return '<a href="mailto:' . antispambot( $email ) . '" class="' . esc_attr( $merged_class ) . '"' . $extra . '>'
+                         . $body . '</a>' . fgr_ee_check_icon();
+
+                case 'strong_method':
+                    return esc_html( $fallback ) . fgr_ee_check_icon();
+
+                case 'with_javascript':
+                default:
+                    $body = $inner_is_html ? $inner_html : fgr_ee_encode_js( $txt, $fallback );
+                    return '<a href="javascript:;" data-enc-email="' . esc_attr( $enc_email ) . '" class="' . esc_attr( $merged_class ) . '"' . $extra . '>'
+                         . $body . '</a>' . fgr_ee_check_icon();
+            }
         },
         $content
     ) ?? $content;
