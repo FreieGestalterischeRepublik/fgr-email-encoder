@@ -2,18 +2,18 @@
 /**
  * Plugin Name:  FGR Email Encoder
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Schützt E-Mail-Adressen auf deiner Website automatisch vor Spam-Bots. Unterstützt mehrere Verschlüsselungsmethoden, Shortcodes und ist vollständig über das WordPress-Backend konfigurierbar.
- * Version:      1.1.2
+ * Version:      1.1.3
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
- * Requires PHP: 8.0
+ * Requires PHP: 7.4
  * Requires at least: 6.0
  * Text Domain:  fgr-email-encoder
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_EE_VERSION', '1.1.2' );
+define( 'FGR_EE_VERSION', '1.1.3' );
 define( 'FGR_EE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'FGR_EE_URL',     plugin_dir_url( __FILE__ ) );
 
