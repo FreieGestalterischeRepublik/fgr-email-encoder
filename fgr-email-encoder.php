@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Email Encoder
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Schützt E-Mail-Adressen auf deiner Website automatisch vor Spam-Bots. Unterstützt mehrere Verschlüsselungsmethoden, Shortcodes und ist vollständig über das WordPress-Backend konfigurierbar.
- * Version:      1.1.3
+ * Version:      1.1.4
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_EE_VERSION', '1.1.3' );
+define( 'FGR_EE_VERSION', '1.1.4' );
 define( 'FGR_EE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'FGR_EE_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -68,7 +68,21 @@ if ( is_admin() && substr( untrailingslashit( FGR_EE_DIR ), -5 ) === '-main' ) {
 // ── MU-Plugin-Sync ────────────────────────────────────────────────────────────
 if ( ! function_exists( 'fgr_mu_sync' ) ) {
     function fgr_mu_sync(): void {
-        $url  = 'https://raw.githubusercontent.com/FreieGestalterischeRepublik/fgr-plugin-overview/main/fgr-plugin-overview.php';
+        // An den jeweils aktuellen GitHub-Release gepinnt statt an den beweglichen main-Branch:
+        // ein Release ist ein bewusster, protokollierter Veröffentlichungsschritt, kein einzelner Push.
+        $release = wp_remote_get(
+            'https://api.github.com/repos/FreieGestalterischeRepublik/fgr-plugin-overview/releases/latest',
+            [
+                'timeout'    => 10,
+                'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url(),
+            ]
+        );
+        if ( is_wp_error( $release ) || 200 !== wp_remote_retrieve_response_code( $release ) ) return;
+        $release_data = json_decode( wp_remote_retrieve_body( $release ), true );
+        $tag          = (string) ( $release_data['tag_name'] ?? '' );
+        if ( '' === $tag || ! preg_match( '/^v?[\d.]+$/', $tag ) ) return;
+
+        $url  = 'https://raw.githubusercontent.com/FreieGestalterischeRepublik/fgr-plugin-overview/' . rawurlencode( $tag ) . '/fgr-plugin-overview.php';
         $dest = WPMU_PLUGIN_DIR . '/fgr-plugin-overview.php';
 
         $response = wp_remote_get( $url, [
@@ -275,7 +289,21 @@ if ( ! function_exists( 'fgr_register_admin_menu' ) ) {
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
-        $zip_url  = "https://github.com/FreieGestalterischeRepublik/{$slug}/archive/refs/heads/main.zip";
+        // An den aktuellen Release-Tag gepinnt statt an den beweglichen main-Branch
+        // (siehe fgr_mu_sync() oben) — ein Release ist ein bewusster Veröffentlichungsschritt.
+        $release = wp_remote_get(
+            "https://api.github.com/repos/FreieGestalterischeRepublik/{$slug}/releases/latest",
+            [ 'timeout' => 10, 'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url() ]
+        );
+        if ( is_wp_error( $release ) || 200 !== wp_remote_retrieve_response_code( $release ) ) {
+            wp_send_json_error( 'Release-Information konnte nicht geladen werden.' );
+        }
+        $tag = (string) ( json_decode( wp_remote_retrieve_body( $release ), true )['tag_name'] ?? '' );
+        if ( '' === $tag || ! preg_match( '/^v?[\d.]+$/', $tag ) ) {
+            wp_send_json_error( 'Ungültige Release-Version.' );
+        }
+
+        $zip_url  = "https://github.com/FreieGestalterischeRepublik/{$slug}/archive/refs/tags/{$tag}.zip";
         $skin     = new WP_Ajax_Upgrader_Skin();
         $upgrader = new Plugin_Upgrader( $skin );
         $result   = $upgrader->install( $zip_url );
@@ -287,10 +315,14 @@ if ( ! function_exists( 'fgr_register_admin_menu' ) ) {
             wp_send_json_error( 'Installation fehlgeschlagen. Bitte Dateisystem-Berechtigungen prüfen.' );
         }
 
-        $wrong_dir   = WP_PLUGIN_DIR . '/' . $slug . '-main';
+        // GitHub-Tag-Archive entpacken sich als "{slug}-{tag}" (z.B. "fgr-email-encoder-v1.1.3")
+        // statt "{slug}" — auf den erwarteten Ordnernamen umbenennen.
         $correct_dir = WP_PLUGIN_DIR . '/' . $slug;
-        if ( is_dir( $wrong_dir ) && ! is_dir( $correct_dir ) ) {
-            rename( $wrong_dir, $correct_dir );
+        if ( ! is_dir( $correct_dir ) ) {
+            foreach ( glob( WP_PLUGIN_DIR . '/' . $slug . '-*', GLOB_ONLYDIR ) as $wrong_dir ) {
+                rename( $wrong_dir, $correct_dir );
+                break;
+            }
         }
 
         wp_send_json_success( [ 'message' => 'Plugin erfolgreich installiert.' ] );
@@ -370,7 +402,10 @@ function fgr_ee_encode_escape( string $value, string $fallback ): string {
 
 // CSS-Methode: Text wird umgekehrt und per CSS (direction:rtl) korrekt angezeigt
 function fgr_ee_encode_css( string $value ): string {
-    $plain    = html_entity_decode( wp_strip_all_tags( $value ) );
+    // Erst Entities dekodieren, dann Tags entfernen — nicht umgekehrt: sonst kann
+    // codiert eingeschleuster Schadcode (z.B. &lt;img onerror=…&gt;) die Tag-Entfernung
+    // umgehen und würde erst beim Dekodieren zu echtem, unverschlüsselt ausgegebenem HTML.
+    $plain    = wp_strip_all_tags( html_entity_decode( $value ) );
     $length   = strlen( $plain );
     $interval = (int) ceil( min( 5, max( 1, $length / 2 ) ) );
     $offset   = 0;
@@ -559,6 +594,8 @@ add_action( 'plugins_loaded', function () {
         // Vollschutz: gesamte Seite über Output-Buffer scannen
         add_action( 'init', function () use ( $method, $fallback ) {
             if ( defined( 'WP_CLI' ) || defined( 'DOING_CRON' ) || wp_doing_ajax() || is_admin() ) return;
+            // REST-API-Antworten sind i.d.R. JSON, kein HTML — der Regex-Filter würde sie sonst korrumpieren.
+            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) return;
             ob_start( function ( string $content ) use ( $method, $fallback ): string {
                 return fgr_ee_filter_content( $content, $method, $fallback );
             } );

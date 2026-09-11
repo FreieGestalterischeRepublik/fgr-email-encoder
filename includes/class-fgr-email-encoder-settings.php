@@ -22,6 +22,7 @@ class FGR_Email_Encoder_Settings {
 
     public function handle_save(): void {
         if ( ! isset( $_POST['fgr_ee_save'] ) ) return;
+        if ( ! current_user_can( 'manage_options' ) ) return;
         check_admin_referer( 'fgr_ee_save', 'fgr_ee_nonce' );
 
         $protection = absint( $_POST['protection'] ?? 1 );
