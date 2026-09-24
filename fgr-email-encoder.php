@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Email Encoder
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Schützt E-Mail-Adressen auf deiner Website automatisch vor Spam-Bots. Unterstützt mehrere Verschlüsselungsmethoden, Shortcodes und ist vollständig über das WordPress-Backend konfigurierbar.
- * Version:      1.1.4
+ * Version:      1.1.5
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,19 +13,26 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_EE_VERSION', '1.1.4' );
+define( 'FGR_EE_VERSION', '1.1.5' );
 define( 'FGR_EE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'FGR_EE_URL',     plugin_dir_url( __FILE__ ) );
 
-// ── Update-Checker ────────────────────────────────────────────────────────────
+// ── Update-Checker: fragt die zentrale FGR-Update-API ab (nicht direkt GitHub) ──
 require_once FGR_EE_DIR . 'lib/plugin-update-checker/plugin-update-checker.php';
 $fgr_ee_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-    'https://github.com/FreieGestalterischeRepublik/fgr-email-encoder/',
+    'https://fgr-plugins-api.fgr.design/fgr-email-encoder.json',
     __FILE__,
     'fgr-email-encoder'
 );
-$fgr_ee_updater->setBranch( 'main' );
-$fgr_ee_updater->getVcsApi()->enableReleaseAssets();
+
+// Auto-Update: WordPress' täglicher Update-Cron installiert neue Versionen
+// dieses Plugins automatisch, kein manueller Klick auf jeder Seite nötig.
+add_filter( 'auto_update_plugin', function ( $update, $item ) {
+    if ( isset( $item->slug ) && $item->slug === 'fgr-email-encoder' ) {
+        return true;
+    }
+    return $update;
+}, 10, 2 );
 
 add_filter( 'plugin_row_meta', function ( array $links, string $plugin_file ): array {
     if ( plugin_basename( __FILE__ ) !== $plugin_file || ! current_user_can( 'update_plugins' ) ) {
